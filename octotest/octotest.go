@@ -29,6 +29,9 @@ type Server struct {
 	finish  func()
 	client  octo.Client
 	handler *internal.RequestHandler
+	
+	httpClient *http.Client
+	baseURL *net.URL
 }
 
 // Finish stops the underlying server
@@ -41,9 +44,22 @@ func (s *Server) Finish() {
 // Client returns an octo.Client configured for this server
 func (s *Server) Client() octo.Client {
 	s.mu.Lock()
-	client := s.client
-	s.mu.Unlock()
-	return client
+	defer s.mu.Unlock()
+	return s.client
+}
+
+// HTTPClient returns an *http.Client configured for this server
+func (s *Server) HTTPClient() *http.Client {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.httpClient
+}
+
+// BaseURL returns the base URL this server is configured for
+func (s *Server) BaseURL() *net.URL {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.baseURL
 }
 
 func (s *Server) handle(w http.ResponseWriter, req *http.Request) {
@@ -64,8 +80,11 @@ func New(opt ...octo.RequestOption) *Server {
 	if err != nil {
 		panic(fmt.Sprintf("error parsing server url: %v", err))
 	}
+	s.baseURL = baseURL
+	s.httpClient = s.server.Client()
+	
 	s.client = s.opts
-	s.client = append(s.client, octo.WithHTTPClient(s.server.Client()), octo.WithBaseURL(*baseURL))
+	s.client = append(s.client, octo.WithHTTPClient(s.httpClient), octo.WithBaseURL(*s.baseURL))
 	s.finish = func() {
 		s.server.Close()
 	}
